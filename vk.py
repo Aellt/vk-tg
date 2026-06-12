@@ -1,15 +1,18 @@
 import requests
 
 VK_API = "https://api.vk.com/method/wall.get"
-API_VERSION = "5.131"
+VERSION = "5.131"
 
 
-def get_latest_post(domain, token):
+def get_latest_posts(domain, token, count=3):
     r = requests.get(VK_API, params={
         "access_token": token,
-        "v": API_VERSION,
+        "v": VERSION,
         "domain": domain,
-        "count": 1
+        "count": count
     }).json()
 
-    return r["response"]["items"][0]
+    if "error" in r:
+        raise Exception(f"VK ERROR: {r['error']}")
+
+    return r["response"]["items"]
