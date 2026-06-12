@@ -21,6 +21,7 @@ def is_valid_post(post):
     return True
 
 
+
 def run():
     state = load_state()
     sent = set(state.get("sent", []))
