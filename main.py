@@ -44,9 +44,6 @@ def run():
         if fp in sent:
             continue
 
-        # фильтр по 20-минутному окну
-        if not in_time_window(post_time, now):
-            continue
 
         text = post.get("text", "")
         photos = extract_photos(post)
