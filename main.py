@@ -1,5 +1,4 @@
 import os
-import time
 
 from vk import get_latest_posts
 from telegram import send_post
@@ -13,17 +12,38 @@ TG_CHANNEL = os.environ["TG_CHANNEL"]
 GROUPS = ["nthnzone", "nthnzonehorny"]
 
 
+def is_valid_post(post):
+    # убираем закреп
+    if post.get("is_pinned", 0) == 1:
+        return False
+
+    # убираем рекламу (на всякий случай)
+    if post.get("marked_as_ads", 0) == 1:
+        return False
+
+    return True
+
+
 def run():
     sent = set()
 
     print("BOT STARTED")
 
     for group in GROUPS:
-        print(f"CHECK GROUP: {group}")
+        print(f"\nCHECK GROUP: {group}")
 
-        posts = get_latest_posts(group, VK_TOKEN, count=3)
+        posts = get_latest_posts(group, VK_TOKEN, count=5)
 
         for post in posts:
+
+            post_id = post.get("id")
+            print("FOUND POST:", post_id)
+
+            # фильтр pinned / ads
+            if not is_valid_post(post):
+                print("SKIP PINNED/ADS:", post_id)
+                continue
+
             fp = post_fingerprint(post, group)
 
             if fp in sent:
@@ -40,13 +60,9 @@ def run():
 
             sent.add(fp)
 
-            # важно: чтобы не слать сразу 10 постов за один запуск
+            # важно: отправляем только 1 новый пост за запуск
             break
 
 
 if __name__ == "__main__":
     run()
-
-for post in posts:
-    if not is_valid_post(post):
-        continue
