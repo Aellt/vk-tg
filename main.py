@@ -13,6 +13,7 @@ TG_CHANNEL = os.environ["TG_CHANNEL"]
 GROUPS = ["nthnzone", "nthnzonehorny"]
 
 
+
 def is_valid_post(post):
     if post.get("is_pinned", 0) == 1:
         return False
