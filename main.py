@@ -54,7 +54,9 @@ def run():
 
     cache["sent"] = list(sent)[-500:]
     save_cache(cache)
-
+    
+post = get_latest_post(group, VK_TOKEN)
+print(post)
 
 if __name__ == "__main__":
     run()
