@@ -64,3 +64,4 @@ if __name__ == "__main__":
 
 for group in GROUPS:
     post = get_latest_post(group, VK_TOKEN)
+    print(post)
