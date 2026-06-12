@@ -46,3 +46,7 @@ def run():
 
 if __name__ == "__main__":
     run()
+
+for post in posts:
+    if not is_valid_post(post):
+        continue
