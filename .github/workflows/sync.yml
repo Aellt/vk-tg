@@ -1,16 +1,12 @@
 name: VK to Telegram Sync
 
 on:
-  push:
-    paths:
-      - 'state.json'
+  schedule:
+    # Запуск каждые 20 минут: на 2-й, 22-й и 42-й минуте каждого часа
+    - cron: "2,22,42 * * * *"
   workflow_dispatch:
 
-
-concurrency:
-  group: vk-sync
-  cancel-in-progress: true
-
+# Полностью убираем concurrency, так как за 20 минут задача точно успеет завершиться
 permissions:
   contents: write
 
@@ -22,7 +18,6 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          # Используем наш PAT вместо стандартного токена
           token: ${{ secrets.BOT_PAT }}
           
       - name: Setup Python
@@ -44,9 +39,7 @@ jobs:
         run: |
           git config user.name "vk-bot"
           git config user.email "bot@github.com"
-
+          git pull origin main --rebase
           git add state.json
-
           git commit -m "update state" || echo "no changes"
-
-          git push
+          git push origin main
