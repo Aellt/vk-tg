@@ -62,5 +62,5 @@ def run():
 if __name__ == "__main__":
     run()
 
-post = get_latest_post(group, VK_TOKEN)
-print(post)
+for group in GROUPS:
+    post = get_latest_post(group, VK_TOKEN)
