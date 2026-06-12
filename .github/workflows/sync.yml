@@ -1,10 +1,10 @@
 name: VK to Telegram Sync
 
-on:
-  push:
-    paths:
-      - 'state.json'
-  workflow_dispatch:
+#on:
+#  push:
+#    paths:
+#      - 'state.json'
+#  workflow_dispatch:
 
 # Изменяем логику: если запустился новый воркфлоу, 
 # старый НЕ отменяется, а ждет своей очереди в очереди (queue)
