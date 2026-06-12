@@ -1,10 +1,9 @@
 import os
-import json
-from datetime import datetime
+import time
 
-from vk import get_latest_post
+from vk import get_latest_posts
 from telegram import send_post
-from utils import extract_photos, post_fingerprint, in_time_window
+from utils import extract_photos, post_fingerprint
 
 
 VK_TOKEN = os.environ["VK_TOKEN"]
@@ -14,54 +13,36 @@ TG_CHANNEL = os.environ["TG_CHANNEL"]
 GROUPS = ["nthnzone", "nthnzonehorny"]
 
 
-def load_cache():
-    try:
-        with open("sent_cache.json", "r") as f:
-            return json.load(f)
-    except:
-        return {"sent": []}
-
-
-def save_cache(cache):
-    with open("sent_cache.json", "w") as f:
-        json.dump(cache, f, indent=2)
-
-
 def run():
-    cache = load_cache()
-    sent = set(cache["sent"])
+    sent = set()
 
-    now = datetime.utcnow()
+    print("BOT STARTED")
 
     for group in GROUPS:
-        post = get_latest_post(group, VK_TOKEN)
+        print(f"CHECK GROUP: {group}")
 
-        post_time = datetime.utcfromtimestamp(post["date"])
+        posts = get_latest_posts(group, VK_TOKEN, count=3)
 
-        fp = post_fingerprint(post, group)
+        for post in posts:
+            fp = post_fingerprint(post, group)
 
-        # уже отправляли
-        if fp in sent:
-            continue
+            if fp in sent:
+                print("SKIP DUPLICATE:", fp)
+                continue
 
-        # фильтр по 20-минутному окну
-        if not in_time_window(post_time, now):
-            continue
+            text = post.get("text", "").strip()
+            photos = extract_photos(post)
 
-        text = post.get("text", "")
-        photos = extract_photos(post)
+            print("SEND POST:", fp)
+            print("TEXT LEN:", len(text), "PHOTOS:", len(photos))
 
-        send_post(TG_TOKEN, TG_CHANNEL, text, photos)
+            send_post(TG_TOKEN, TG_CHANNEL, text, photos)
 
-        sent.add(fp)
+            sent.add(fp)
 
-    cache["sent"] = list(sent)[-500:]
-    save_cache(cache)
+            # важно: чтобы не слать сразу 10 постов за один запуск
+            break
 
 
 if __name__ == "__main__":
     run()
-
-for group in GROUPS:
-    post = get_latest_post(group, VK_TOKEN)
-    print(post)
