@@ -3,7 +3,6 @@ import os
 
 STATE_FILE = "state.json"
 
-
 def load_state():
     if not os.path.exists(STATE_FILE):
         return {"sent": []}
