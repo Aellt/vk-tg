@@ -1,9 +1,11 @@
 name: VK to Telegram Sync
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  push:
+    paths:
+      - 'state.json'
   workflow_dispatch:
+
 
 concurrency:
   group: vk-sync
