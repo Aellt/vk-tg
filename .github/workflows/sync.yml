@@ -19,7 +19,10 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
+        with:
+          # Используем наш PAT вместо стандартного токена
+          token: ${{ secrets.BOT_PAT }}
+          
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
