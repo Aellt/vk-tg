@@ -1,0 +1,45 @@
+name: VK to Telegram Sync
+
+on:
+  schedule:
+    # Запуск каждые 20 минут: на 2-й, 22-й и 42-й минуте каждого часа
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+# Полностью убираем concurrency, так как за 20 минут задача точно успеет завершиться
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.BOT_PAT }}
+          
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          VK_TOKEN: ${{ secrets.VK_TOKEN }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHANNEL: ${{ secrets.TG_CHANNEL }}
+        run: python main.py
+
+      - name: Commit state
+        run: |
+          git config user.name "vk-bot"
+          git config user.email "bot@github.com"
+          git pull origin main --rebase
+          git add state.json
+          git commit -m "update state" || echo "no changes"
+          git push origin main
