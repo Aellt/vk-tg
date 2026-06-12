@@ -1,19 +1,9 @@
 name: VK to Telegram Sync
 
-#on:
-#  push:
-#    paths:
-#      - 'state.json'
-#  workflow_dispatch:
-
-# Изменяем логику: если запустился новый воркфлоу, 
-# старый НЕ отменяется, а ждет своей очереди в очереди (queue)
-concurrency:
-  group: vk-sync
-  cancel-in-progress: false
-
-permissions:
-  contents: write
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -22,9 +12,7 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.BOT_PAT }}
-          
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -40,14 +28,10 @@ jobs:
           TG_CHANNEL: ${{ secrets.TG_CHANNEL }}
         run: python main.py
 
-      - name: Commit state
+      - name: Save cache
         run: |
           git config user.name "vk-bot"
           git config user.email "bot@github.com"
-          
-          # Явно вытягиваем изменения, если они были, чтобы избежать конфликтов push
-          git pull origin main --rebase
-
-          git add state.json
-          git commit -m "update state" || echo "no changes"
+          git add sent_cache.json
+          git commit -m "update cache" || echo "no changes"
           git push
