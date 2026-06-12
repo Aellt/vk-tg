@@ -5,6 +5,9 @@ on:
     - cron: "*/10 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -28,7 +31,7 @@ jobs:
           TG_CHANNEL: ${{ secrets.TG_CHANNEL }}
         run: python main.py
 
-      - name: Save cache
+      - name: Commit state
         run: |
           git config user.name "vk-bot"
           git config user.email "bot@github.com"
