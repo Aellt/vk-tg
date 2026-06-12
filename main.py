@@ -1,10 +1,10 @@
 import os
 import json
-from datetime import datetime
+import traceback
 
 from vk import get_latest_post
 from telegram import send_post
-from utils import extract_photos, post_fingerprint, in_time_window
+from utils import extract_photos, post_fingerprint
 
 
 VK_TOKEN = os.environ["VK_TOKEN"]
@@ -14,51 +14,40 @@ TG_CHANNEL = os.environ["TG_CHANNEL"]
 GROUPS = ["nthnzone", "nthnzonehorny"]
 
 
-def load_cache():
-    try:
-        with open("sent_cache.json", "r") as f:
-            return json.load(f)
-    except:
-        return {"sent": []}
-
-
-def save_cache(cache):
-    with open("sent_cache.json", "w") as f:
-        json.dump(cache, f, indent=2)
-
-
 def run():
-    cache = load_cache()
-    sent = set(cache["sent"])
+    sent = set()
 
-    now = datetime.utcnow()
+    print("START BOT")
 
     for group in GROUPS:
+        print("GROUP:", group)
+
         post = get_latest_post(group, VK_TOKEN)
 
-        post_time = datetime.utcfromtimestamp(post["date"])
+        print("POST RECEIVED:", post["id"])
 
         fp = post_fingerprint(post, group)
 
-        # уже отправляли
         if fp in sent:
+            print("SKIP DUPLICATE")
             continue
-
 
         text = post.get("text", "")
         photos = extract_photos(post)
+
+        print("SENDING TO TG")
 
         send_post(TG_TOKEN, TG_CHANNEL, text, photos)
 
         sent.add(fp)
 
-    cache["sent"] = list(sent)[-500:]
-    save_cache(cache)
-    
+        print("DONE:", fp)
 
 
 if __name__ == "__main__":
-    run()
-    
-post = get_latest_post(group, VK_TOKEN)
-print(post)
+    try:
+        run()
+    except Exception as e:
+        print("ERROR:", e)
+        traceback.print_exc()
+        raise
