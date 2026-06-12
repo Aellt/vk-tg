@@ -1,11 +1,17 @@
 name: VK to Telegram Sync
 
 on:
+  push:
+    paths:
+      - 'state.json'
   workflow_dispatch:
-  schedule:
-    - cron: "*/5 * * * *"
 
-# Полностью убираем concurrency, так как за 20 минут задача точно успеет завершиться
+# Изменяем логику: если запустился новый воркфлоу, 
+# старый НЕ отменяется, а ждет своей очереди в очереди (queue)
+concurrency:
+  group: vk-sync
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -38,7 +44,10 @@ jobs:
         run: |
           git config user.name "vk-bot"
           git config user.email "bot@github.com"
+          
+          # Явно вытягиваем изменения, если они были, чтобы избежать конфликтов push
           git pull origin main --rebase
+
           git add state.json
           git commit -m "update state" || echo "no changes"
-          git push origin main
+          git push
