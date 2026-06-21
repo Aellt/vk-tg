@@ -2,7 +2,7 @@ name: VK to Telegram Sync
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/20 * * * *"
   workflow_dispatch:
 
 jobs:
