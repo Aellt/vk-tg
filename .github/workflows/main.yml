@@ -32,6 +32,6 @@ jobs:
         run: |
           git config user.name "vk-bot"
           git config user.email "bot@github.com"
-          git add sent_cache.json
+          git add state.json
           git commit -m "update cache" || echo "no changes"
           git push
