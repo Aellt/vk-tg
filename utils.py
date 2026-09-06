@@ -11,7 +11,13 @@ def extract_photos(post):
     for att in post.get("attachments", []):
         if att["type"] == "photo":
             sizes = att["photo"]["sizes"]
-            best = sizes[-1]["url"]
-            photos.append(best)
+
+            if sizes:
+                best = max(
+                    sizes,
+                    key=lambda x: x.get("width", 0) * x.get("height", 0)
+                )
+
+                photos.append(best["url"])
 
     return photos
