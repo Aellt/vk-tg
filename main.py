@@ -57,13 +57,16 @@ def run():
 
         print("SEND:", fp)
 
-        send_post(
+        success = send_post(
             TG_TOKEN,
             TG_CHANNEL,
             text,
             photos
         )
 
+        if not success:
+            print("SEND FAILED", fp)
+            continue
         # Для каждой группы храним только последний пост
         sent = {
             x for x in sent
