@@ -21,7 +21,7 @@ from telebot.types import InputMediaPhoto
 load_dotenv()
 
 # === Настройки ===
-TG_BOT_TOKEN = os.getenv("TG_TOKEN")
+TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TG_CHANNEL")
 VK_DOMAIN = os.getenv("nthnzone", "nthnzonehorny")
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "120"))
