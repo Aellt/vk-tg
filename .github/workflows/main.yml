@@ -34,9 +34,8 @@ jobs:
 
       - name: Run bot
         env:
-          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-          VK_DOMAIN: ${{ secrets.VK_DOMAIN }}
+          TG_BOT_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHANNEL }}
           USE_PLAYWRIGHT: "1"
           CHECK_INTERVAL: "60"
         run: |
