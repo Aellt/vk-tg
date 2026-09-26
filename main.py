@@ -105,7 +105,7 @@ def clean_text(raw: str) -> str:
         r"Действия", r"Отправить реакцию.*", r"Выбор реакции",
         r"Нравится", r"Комментировать", r"Поделиться",
         r"Показать ещё", r"Читать полностью", r"Перевести",
-        r"Источник", r"No Thoughts Head Null",
+        r"Источник", r"No Thoughts Head Null", r"Now Take Her Naked",
         r"nthnzonehorny", r"nthnzone",
         r"http\S+", r"vk\.com\S*",
         r"\d+\s*(ч|мин|д|нед|мес)\s*назад",
