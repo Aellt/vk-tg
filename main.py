@@ -275,10 +275,17 @@ def main():
     log.info(f"Паблики: {VK_DOMAINS}")
     state = load_state()
 
+    def get_post_number(post_id: str) -> int:
+        try:
+            return int(post_id.split("_")[1])
+        except Exception:
+            return 0
+
     for domain in VK_DOMAINS:
         log.info(f"---------- {domain} ----------")
         last_id = state.get(domain)
-        log.info(f"Последний ID из файла: {last_id or 'нет'}")
+        last_number = get_post_number(last_id) if last_id else 0
+        log.info(f"Последний ID: {last_id or 'нет'} (номер: {last_number})")
 
         try:
             html = fetch_html(domain)
@@ -292,17 +299,22 @@ def main():
         if not posts:
             continue
 
-        # Показываем ID найденных постов для отладки
         found_ids = [p["id"] for p in posts]
         log.info(f"ID на странице: {found_ids}")
 
         new_posts = []
         for post in posts:
-            if last_id and post["id"] == last_id:
-                break
-            new_posts.append(post)
+            post_number = get_post_number(post["id"])
 
-        new_posts = list(reversed(new_posts))
+            # Пропускаем закреплённые (очень маленькие ID)
+            if post_number < 10:
+                continue
+
+            if post_number > last_number:
+                new_posts.append(post)
+
+        # От старых к новым
+        new_posts.sort(key=lambda p: get_post_number(p["id"]))
 
         if not new_posts:
             log.info("Новых постов нет")
