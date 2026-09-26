@@ -23,7 +23,7 @@ TG_CHAT_ID = os.getenv("TG_CHAT_ID")
 
 # Можно указать несколько через запятую
 # Пример: nthnzone,anotherpublic
-VK_DOMAINS_RAW = os.getenv("nthnzone", "nthnzonehorny")
+VK_DOMAINS_RAW = os.getenv("VK_DOMAIN", "nthnzone")
 VK_DOMAINS = [d.strip() for d in VK_DOMAINS_RAW.split(",") if d.strip()]
 
 USE_PLAYWRIGHT = os.getenv("USE_PLAYWRIGHT", "1") == "1"
