@@ -123,7 +123,7 @@ def clean_text(raw: str) -> str:
     if len(hashtags) == 1:
         return hashtags[0]
 
-    return f"{hashtags[0]}\n{' '.join(hashtags[1:])}"
+    return f"{hashtags[0]}\n\n{' '.join(hashtags[1:])}"
 
 
 # ===================== ПАРСИНГ =====================
