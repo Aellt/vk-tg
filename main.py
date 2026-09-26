@@ -3,6 +3,7 @@
 VK → Telegram
 Только картинки + хештеги
 Паблики: nthnzone + nthnzonehorny
+Состояние хранится в last_post_ids.json
 """
 
 import os
@@ -12,7 +13,6 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Set
 
-import requests
 from bs4 import BeautifulSoup
 import telebot
 from telebot.types import InputMediaPhoto
@@ -23,7 +23,6 @@ TG_CHAT_ID = os.getenv("TG_CHAT_ID")
 
 VK_DOMAINS = ["nthnzone", "nthnzonehorny"]
 
-USE_PLAYWRIGHT = True
 STATE_FILE = Path("last_post_ids.json")
 
 HEADERS = {
@@ -76,7 +75,11 @@ def fetch_html(domain: str) -> str:
             viewport={"width": 1280, "height": 900},
         )
         page = context.new_page()
-        page.goto(f"https://m.vk.com/{domain}", wait_until="domcontentloaded", timeout=45000)
+        page.goto(
+            f"https://m.vk.com/{domain}",
+            wait_until="domcontentloaded",
+            timeout=45000
+        )
 
         try:
             page.wait_for_selector(
@@ -93,11 +96,10 @@ def fetch_html(domain: str) -> str:
 
 # ===================== ОЧИСТКА ТЕКСТА =====================
 def clean_text(raw: str) -> str:
-    """Оставляет только строки с хештегами"""
+    """Оставляет хештеги: первый отдельно, остальные через пробел"""
     if not raw:
         return ""
 
-    # Удаляем всё лишнее
     junk = [
         r"Действия",
         r"Отправить реакцию.*",
@@ -125,14 +127,18 @@ def clean_text(raw: str) -> str:
     for pattern in junk:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.MULTILINE)
 
-    # Оставляем ТОЛЬКО строки, в которых есть #
-    lines = []
-    for line in text.splitlines():
-        line = line.strip()
-        if "#" in line:
-            lines.append(line)
+    # Собираем все хештеги
+    hashtags = re.findall(r"#\w+", text)
 
-    return "\n".join(lines).strip()[:500]
+    if not hashtags:
+        return ""
+
+    if len(hashtags) == 1:
+        return hashtags[0]
+
+    first = hashtags[0]
+    rest = " ".join(hashtags[1:])
+    return f"{first}\n{rest}"
 
 
 # ===================== ПАРСИНГ =====================
@@ -261,14 +267,15 @@ def main():
         if not posts:
             continue
 
-        # Собираем только новые
+        # Собираем только новые посты
         new_posts = []
         for post in posts:
             if last_id and post["id"] == last_id:
                 break
             new_posts.append(post)
 
-        new_posts = list(reversed(new_posts))  # от старых к новым
+        # Отправляем от старых к новым
+        new_posts = list(reversed(new_posts))
 
         if not new_posts:
             log.info("Новых постов нет")
