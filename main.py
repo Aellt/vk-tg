@@ -3,16 +3,17 @@
 VK → Telegram
 Только картинки + хештеги
 Паблики: nthnzone + nthnzonehorny
-Состояние хранится в last_post_ids.json
 """
 
 import os
 import re
 import json
 import logging
+import tempfile
 from pathlib import Path
 from typing import List, Dict, Set
 
+import requests
 from bs4 import BeautifulSoup
 import telebot
 from telebot.types import InputMediaPhoto
@@ -22,7 +23,6 @@ TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID")
 
 VK_DOMAINS = ["nthnzone", "nthnzonehorny"]
-
 STATE_FILE = Path("last_post_ids.json")
 
 HEADERS = {
@@ -32,6 +32,7 @@ HEADERS = {
         "Chrome/122.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "ru-RU,ru;q=0.9",
+    "Referer": "https://m.vk.com/",
 }
 
 logging.basicConfig(
@@ -48,12 +49,16 @@ bot = telebot.TeleBot(TG_BOT_TOKEN)
 
 # ===================== СОСТОЯНИЕ =====================
 def load_state() -> Dict[str, str]:
-    if STATE_FILE.exists():
-        try:
-            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
+    if not STATE_FILE.exists():
+        log.warning("Файл last_post_ids.json не найден, создаём пустой")
+        return {}
+    try:
+        data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        log.info(f"Загружено состояние: {data}")
+        return data
+    except Exception as e:
+        log.error(f"Ошибка чтения состояния: {e}")
+        return {}
 
 
 def save_state(state: Dict[str, str]):
@@ -61,6 +66,7 @@ def save_state(state: Dict[str, str]):
         json.dumps(state, ensure_ascii=False, indent=2),
         encoding="utf-8"
     )
+    log.info(f"Состояние сохранено: {state}")
 
 
 # ===================== ПОЛУЧЕНИЕ HTML =====================
@@ -75,11 +81,7 @@ def fetch_html(domain: str) -> str:
             viewport={"width": 1280, "height": 900},
         )
         page = context.new_page()
-        page.goto(
-            f"https://m.vk.com/{domain}",
-            wait_until="domcontentloaded",
-            timeout=45000
-        )
+        page.goto(f"https://m.vk.com/{domain}", wait_until="domcontentloaded", timeout=45000)
 
         try:
             page.wait_for_selector(
@@ -87,7 +89,7 @@ def fetch_html(domain: str) -> str:
                 timeout=15000
             )
         except Exception:
-            log.warning(f"[{domain}] посты не найдены на странице")
+            log.warning(f"[{domain}] посты не найдены")
 
         html = page.content()
         browser.close()
@@ -96,49 +98,32 @@ def fetch_html(domain: str) -> str:
 
 # ===================== ОЧИСТКА ТЕКСТА =====================
 def clean_text(raw: str) -> str:
-    """Оставляет хештеги: первый отдельно, остальные через пробел"""
     if not raw:
         return ""
 
     junk = [
-        r"Действия",
-        r"Отправить реакцию.*",
-        r"Выбор реакции",
-        r"Нравится",
-        r"Комментировать",
-        r"Поделиться",
-        r"Показать ещё",
-        r"Читать полностью",
-        r"Перевести",
-        r"Источник",
-        r"No Thoughts Head Null",
-        r"Now Take Her Naked",
-        r"nthnzonehorny",
-        r"nthnzone",
-        r"http\S+",
-        r"vk\.com\S*",
+        r"Действия", r"Отправить реакцию.*", r"Выбор реакции",
+        r"Нравится", r"Комментировать", r"Поделиться",
+        r"Показать ещё", r"Читать полностью", r"Перевести",
+        r"Источник", r"No Thoughts Head Null",
+        r"nthnzonehorny", r"nthnzone",
+        r"http\S+", r"vk\.com\S*",
         r"\d+\s*(ч|мин|д|нед|мес)\s*назад",
-        r"вчера",
-        r"сегодня",
-        r"^\d+$",
+        r"вчера", r"сегодня", r"^\d+$",
     ]
 
     text = raw
     for pattern in junk:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.MULTILINE)
 
-    # Собираем все хештеги
     hashtags = re.findall(r"#\w+", text)
-
     if not hashtags:
         return ""
 
     if len(hashtags) == 1:
         return hashtags[0]
 
-    first = hashtags[0]
-    rest = " ".join(hashtags[1:])
-    return f"{first}\n{rest}"
+    return f"{hashtags[0]}\n{' '.join(hashtags[1:])}"
 
 
 # ===================== ПАРСИНГ =====================
@@ -154,7 +139,6 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
 
     for item in items:
         try:
-            # ID поста
             post_id = None
             data_id = item.get("data-post-id") or item.get("id") or ""
             m = re.search(r"(-?\d+)_(\d+)", str(data_id))
@@ -173,7 +157,6 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
                 continue
             seen.add(post_id)
 
-            # Текст
             raw_text = ""
             for sel in [".wall_post_text", ".pi_text", ".post_content", ".wi_body", ".wall_text"]:
                 el = item.select_one(sel)
@@ -181,13 +164,11 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
                     raw_text = el.get_text("\n", strip=True)
                     if len(raw_text) > 5:
                         break
-
             if not raw_text:
                 raw_text = item.get_text("\n", strip=True)
 
             text = clean_text(raw_text)
 
-            # Картинки
             photos = []
             for img in item.select("img"):
                 src = img.get("src") or img.get("data-src") or img.get("data-original") or ""
@@ -202,8 +183,6 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
                     photos.append(src)
 
             photos = list(dict.fromkeys(photos))
-
-            # Берём только посты с картинками
             if not photos:
                 continue
 
@@ -213,7 +192,6 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
                 "text": text,
                 "photos": photos[:9],
             })
-
         except Exception as e:
             log.debug(f"Ошибка парсинга: {e}")
             continue
@@ -221,28 +199,75 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
     return posts
 
 
+# ===================== СКАЧИВАНИЕ КАРТИНКИ =====================
+def download_image(url: str) -> str | None:
+    """Скачивает картинку во временный файл и возвращает путь"""
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=20)
+        r.raise_for_status()
+
+        suffix = ".jpg"
+        if "png" in url.lower():
+            suffix = ".png"
+        elif "webp" in url.lower():
+            suffix = ".webp"
+
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp.write(r.content)
+        tmp.close()
+        return tmp.name
+    except Exception as e:
+        log.warning(f"Не удалось скачать {url}: {e}")
+        return None
+
+
 # ===================== ОТПРАВКА =====================
 def send_post(post: Dict):
     text = post.get("text", "").strip()
     photos = post.get("photos", [])
-
     caption = text if text else None
 
+    # Скачиваем все картинки
+    local_files = []
+    for url in photos:
+        path = download_image(url)
+        if path:
+            local_files.append(path)
+
+    if not local_files:
+        log.warning(f"Не удалось скачать ни одной картинки для {post['id']}")
+        return
+
     try:
-        if len(photos) == 1:
-            bot.send_photo(TG_CHAT_ID, photos[0], caption=caption)
+        if len(local_files) == 1:
+            with open(local_files[0], "rb") as f:
+                bot.send_photo(TG_CHAT_ID, f, caption=caption)
         else:
             media = []
-            for i, photo in enumerate(photos):
+            files = []
+            for i, path in enumerate(local_files):
+                f = open(path, "rb")
+                files.append(f)
                 if i == 0 and caption:
-                    media.append(InputMediaPhoto(photo, caption=caption))
+                    media.append(InputMediaPhoto(f, caption=caption))
                 else:
-                    media.append(InputMediaPhoto(photo))
+                    media.append(InputMediaPhoto(f))
+
             bot.send_media_group(TG_CHAT_ID, media)
 
-        log.info(f"✅ [{post['domain']}] {post['id']} | фото: {len(photos)}")
+            for f in files:
+                f.close()
+
+        log.info(f"✅ [{post['domain']}] {post['id']} | фото: {len(local_files)}")
     except Exception as e:
         log.error(f"Ошибка отправки {post['id']}: {e}")
+    finally:
+        # Удаляем временные файлы
+        for path in local_files:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
 
 
 # ===================== MAIN =====================
@@ -253,7 +278,7 @@ def main():
     for domain in VK_DOMAINS:
         log.info(f"---------- {domain} ----------")
         last_id = state.get(domain)
-        log.info(f"Последний ID: {last_id or 'нет'}")
+        log.info(f"Последний ID из файла: {last_id or 'нет'}")
 
         try:
             html = fetch_html(domain)
@@ -267,21 +292,23 @@ def main():
         if not posts:
             continue
 
-        # Собираем только новые посты
+        # Показываем ID найденных постов для отладки
+        found_ids = [p["id"] for p in posts]
+        log.info(f"ID на странице: {found_ids}")
+
         new_posts = []
         for post in posts:
             if last_id and post["id"] == last_id:
                 break
             new_posts.append(post)
 
-        # Отправляем от старых к новым
         new_posts = list(reversed(new_posts))
 
         if not new_posts:
             log.info("Новых постов нет")
             continue
 
-        log.info(f"Новых: {len(new_posts)}")
+        log.info(f"Новых постов: {len(new_posts)}")
 
         for post in new_posts:
             send_post(post)
