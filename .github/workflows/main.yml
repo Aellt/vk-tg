@@ -1,35 +1,52 @@
-name: VK to Telegram Sync
+name: VK to Telegram Bot
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:        # возможность запускать вручную
 
 jobs:
-  sync:
+  run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Restore last post ID
+        uses: actions/cache@v4
+        with:
+          path: last_post_id.json
+          key: last-post-id-${{ github.run_id }}
+          restore-keys: |
+            last-post-id-
 
       - name: Run bot
         env:
-          VK_TOKEN: ${{ secrets.VK_TOKEN }}
-          TG_TOKEN: ${{ secrets.TG_TOKEN }}
-          TG_CHANNEL: ${{ secrets.TG_CHANNEL }}
-        run: python main.py
-
-      - name: Save cache
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          VK_DOMAIN: ${{ secrets.VK_DOMAIN }}
+          USE_PLAYWRIGHT: "1"
+          CHECK_INTERVAL: "60"
         run: |
-          git config user.name "vk-bot"
-          git config user.email "bot@github.com"
-          git add state.json
-          git commit -m "update cache" || echo "no changes"
-          git push
+          # Запускаем один раз (не в бесконечном цикле)
+          # Чтобы бот работал по расписанию GitHub Actions
+          python main.py --once || python main.py
+
+      - name: Save last post ID
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: last_post_id.json
+          key: last-post-id-${{ github.run_id }}
