@@ -19,7 +19,7 @@ from telebot.types import InputMediaPhoto
 # ===================== НАСТРОЙКИ =====================
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID")
-VK_DOMAIN = os.getenv("nthnzone", "nthnzonehorny)
+VK_DOMAIN = os.getenv("nthnzone", "nthnzonehorny")
 USE_PLAYWRIGHT = os.getenv("USE_PLAYWRIGHT", "1") == "1"
 
 STATE_FILE = Path("last_post_id.json")
