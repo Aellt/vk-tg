@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-VK public walls → Telegram
-Только картинки + хештеги/теги
-Поддержка нескольких пабликов
+VK → Telegram
+Только картинки + хештеги
+Паблики: nthnzone + nthnzonehorny
 """
 
 import os
@@ -10,7 +10,7 @@ import re
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Set
 
 import requests
 from bs4 import BeautifulSoup
@@ -21,12 +21,9 @@ from telebot.types import InputMediaPhoto
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID")
 
-# Можно указать несколько через запятую
-# Пример: nthnzone,anotherpublic
-VK_DOMAINS_RAW = os.getenv("VK_DOMAIN", "nthnzone")
-VK_DOMAINS = [d.strip() for d in VK_DOMAINS_RAW.split(",") if d.strip()]
+VK_DOMAINS = ["nthnzone", "nthnzonehorny"]
 
-USE_PLAYWRIGHT = os.getenv("USE_PLAYWRIGHT", "1") == "1"
+USE_PLAYWRIGHT = True
 STATE_FILE = Path("last_post_ids.json")
 
 HEADERS = {
@@ -38,17 +35,16 @@ HEADERS = {
     "Accept-Language": "ru-RU,ru;q=0.9",
 }
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 log = logging.getLogger("vk2tg")
 
-if not TG_BOT_TOKEN:
-    raise ValueError("TG_BOT_TOKEN не задан")
-if not TG_CHAT_ID:
-    raise ValueError("TG_CHAT_ID не задан")
-if not VK_DOMAINS:
-    raise ValueError("VK_DOMAIN не задан")
+if not TG_BOT_TOKEN or not TG_CHAT_ID:
+    raise ValueError("TG_BOT_TOKEN или TG_CHAT_ID не заданы")
 
-bot = telebot.TeleBot(TG_BOT_TOKEN, parse_mode="HTML")
+bot = telebot.TeleBot(TG_BOT_TOKEN)
 
 
 # ===================== СОСТОЯНИЕ =====================
@@ -62,77 +58,81 @@ def load_state() -> Dict[str, str]:
 
 
 def save_state(state: Dict[str, str]):
-    STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    STATE_FILE.write_text(
+        json.dumps(state, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
 
 
-# ===================== HTML =====================
+# ===================== ПОЛУЧЕНИЕ HTML =====================
 def fetch_html(domain: str) -> str:
-    if USE_PLAYWRIGHT:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent=HEADERS["User-Agent"],
-                locale="ru-RU",
-                viewport={"width": 1280, "height": 900},
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent=HEADERS["User-Agent"],
+            locale="ru-RU",
+            viewport={"width": 1280, "height": 900},
+        )
+        page = context.new_page()
+        page.goto(f"https://m.vk.com/{domain}", wait_until="domcontentloaded", timeout=45000)
+
+        try:
+            page.wait_for_selector(
+                ".wall_item, .post, [data-post-id], div[id^='post']",
+                timeout=15000
             )
-            page = context.new_page()
-            page.goto(f"https://m.vk.com/{domain}", wait_until="domcontentloaded", timeout=40000)
-            try:
-                page.wait_for_selector(".wall_item, .post, [data-post-id], div[id^='post']", timeout=15000)
-            except Exception:
-                pass
-            html = page.content()
-            browser.close()
-            return html
-    else:
-        r = requests.get(f"https://m.vk.com/{domain}", headers=HEADERS, timeout=25)
-        r.raise_for_status()
-        return r.text
+        except Exception:
+            log.warning(f"[{domain}] посты не найдены на странице")
+
+        html = page.content()
+        browser.close()
+        return html
 
 
 # ===================== ОЧИСТКА ТЕКСТА =====================
 def clean_text(raw: str) -> str:
+    """Оставляет только строки с хештегами"""
     if not raw:
         return ""
 
-    # Убираем типичный мусор интерфейса ВК
-    junk_patterns = [
+    # Удаляем всё лишнее
+    junk = [
         r"Действия",
         r"Отправить реакцию.*",
         r"Выбор реакции",
         r"Нравится",
         r"Комментировать",
         r"Поделиться",
-        r"\d+\s*(ч|мин|д|нед|мес)\s*назад",
-        r"вчера",
-        r"сегодня",
         r"Показать ещё",
         r"Читать полностью",
         r"Перевести",
-        r"Редактировать",
-        r"Удалить",
-        r"Закрепить",
-        r"^\d+$",                    # просто цифры
+        r"Источник",
+        r"No Thoughts Head Null",
+        r"Now Take Her Naked",
+        r"nthnzonehorny",
+        r"nthnzone",
+        r"http\S+",
+        r"vk\.com\S*",
+        r"\d+\s*(ч|мин|д|нед|мес)\s*назад",
+        r"вчера",
+        r"сегодня",
+        r"^\d+$",
     ]
 
     text = raw
-    for pattern in junk_patterns:
+    for pattern in junk:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.MULTILINE)
 
-    # Оставляем в основном хештеги и короткий осмысленный текст
+    # Оставляем ТОЛЬКО строки, в которых есть #
     lines = []
     for line in text.splitlines():
         line = line.strip()
-        if not line:
-            continue
-        # Оставляем строки с хештегами или нормальный текст
-        if "#" in line or len(line) > 15:
+        if "#" in line:
             lines.append(line)
 
-    text = "\n".join(lines)
-    text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    return text[:900]
+    return "\n".join(lines).strip()[:500]
 
 
 # ===================== ПАРСИНГ =====================
@@ -148,7 +148,7 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
 
     for item in items:
         try:
-            # ID
+            # ID поста
             post_id = None
             data_id = item.get("data-post-id") or item.get("id") or ""
             m = re.search(r"(-?\d+)_(\d+)", str(data_id))
@@ -175,12 +175,13 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
                     raw_text = el.get_text("\n", strip=True)
                     if len(raw_text) > 5:
                         break
+
             if not raw_text:
                 raw_text = item.get_text("\n", strip=True)
 
             text = clean_text(raw_text)
 
-            # Фото (главное)
+            # Картинки
             photos = []
             for img in item.select("img"):
                 src = img.get("src") or img.get("data-src") or img.get("data-original") or ""
@@ -190,23 +191,21 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
                     src = "https:" + src
 
                 if any(x in src for x in ["userapi.com", "vk.com", "sun", "vkuservideo"]):
-                    # Отсекаем мелкие аватарки и иконки
                     if any(x in src for x in ["_50.", "_100.", "camera_50", "camera_100", "50x50", "75x75"]):
                         continue
                     photos.append(src)
 
-            photos = list(dict.fromkeys(photos))  # уникальные
+            photos = list(dict.fromkeys(photos))
 
-            # Нам нужны в основном посты с картинками
-            if not photos and not text:
+            # Берём только посты с картинками
+            if not photos:
                 continue
 
             posts.append({
                 "id": post_id,
                 "domain": domain,
                 "text": text,
-                "photos": photos[:10],
-                "url": f"https://vk.com/wall{post_id}",
+                "photos": photos[:9],
             })
 
         except Exception as e:
@@ -220,34 +219,22 @@ def parse_posts(html: str, domain: str) -> List[Dict]:
 def send_post(post: Dict):
     text = post.get("text", "").strip()
     photos = post.get("photos", [])
-    url = post["url"]
 
-    # Формируем подпись: только текст (хештеги) + источник
-    if text:
-        caption = f"{text}\n\n<a href='{url}'>Источник</a>"
-    else:
-        caption = f"<a href='{url}'>Источник</a>"
-
-    if len(caption) > 1024:
-        caption = caption[:980] + f"…\n\n<a href='{url}'>Источник</a>"
+    caption = text if text else None
 
     try:
-        if photos:
-            if len(photos) == 1:
-                bot.send_photo(TG_CHAT_ID, photos[0], caption=caption)
-            else:
-                media = []
-                for i, p in enumerate(photos):
-                    if i == 0:
-                        media.append(InputMediaPhoto(p, caption=caption, parse_mode="HTML"))
-                    else:
-                        media.append(InputMediaPhoto(p))
-                bot.send_media_group(TG_CHAT_ID, media)
+        if len(photos) == 1:
+            bot.send_photo(TG_CHAT_ID, photos[0], caption=caption)
         else:
-            # Если картинок нет — просто текст с хештегами
-            bot.send_message(TG_CHAT_ID, caption, disable_web_page_preview=True)
+            media = []
+            for i, photo in enumerate(photos):
+                if i == 0 and caption:
+                    media.append(InputMediaPhoto(photo, caption=caption))
+                else:
+                    media.append(InputMediaPhoto(photo))
+            bot.send_media_group(TG_CHAT_ID, media)
 
-        log.info(f"✅ {post['domain']} → {post['id']}")
+        log.info(f"✅ [{post['domain']}] {post['id']} | фото: {len(photos)}")
     except Exception as e:
         log.error(f"Ошибка отправки {post['id']}: {e}")
 
@@ -258,8 +245,9 @@ def main():
     state = load_state()
 
     for domain in VK_DOMAINS:
-        log.info(f"--- Проверяем {domain} ---")
+        log.info(f"---------- {domain} ----------")
         last_id = state.get(domain)
+        log.info(f"Последний ID: {last_id or 'нет'}")
 
         try:
             html = fetch_html(domain)
@@ -268,12 +256,12 @@ def main():
             continue
 
         posts = parse_posts(html, domain)
-        log.info(f"Найдено постов: {len(posts)}")
+        log.info(f"Найдено постов с картинками: {len(posts)}")
 
         if not posts:
             continue
 
-        # Новые посты
+        # Собираем только новые
         new_posts = []
         for post in posts:
             if last_id and post["id"] == last_id:
@@ -283,17 +271,15 @@ def main():
         new_posts = list(reversed(new_posts))  # от старых к новым
 
         if not new_posts:
-            log.info("Новых нет")
+            log.info("Новых постов нет")
             continue
 
         log.info(f"Новых: {len(new_posts)}")
 
         for post in new_posts:
-            # Отправляем только если есть картинки или нормальные теги
-            if post["photos"] or ("#" in post["text"]):
-                send_post(post)
-                state[domain] = post["id"]
-                save_state(state)
+            send_post(post)
+            state[domain] = post["id"]
+            save_state(state)
 
     log.info("Готово")
 
