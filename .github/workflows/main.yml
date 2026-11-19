@@ -28,6 +28,13 @@ jobs:
           pip install -r requirements.txt
           playwright install --with-deps chromium
 
+      - name: Restore VK session
+        shell: bash
+        env:
+          VK_STORAGE_STATE_B64: ${{ secrets.VK_STORAGE_STATE_B64 }}
+        run: |
+          echo "$VK_STORAGE_STATE_B64" | base64 --decode > vk_state.json
+
       - name: Run bot
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_TOKEN }}
