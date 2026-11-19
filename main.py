@@ -79,6 +79,7 @@ def fetch_html(domain: str) -> str:
             user_agent=HEADERS["User-Agent"],
             locale="ru-RU",
             viewport={"width": 1280, "height": 900},
+            storage_state="vk_state.json"
         )
         page = context.new_page()
         response = page.goto(f"https://m.vk.com/{domain}", wait_until="domcontentloaded", timeout=45000)
