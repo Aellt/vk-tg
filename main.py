@@ -81,7 +81,7 @@ def fetch_html(domain: str) -> str:
             viewport={"width": 1280, "height": 900},
         )
         page = context.new_page()
-        page.goto(f"https://m.vk.com/{domain}", wait_until="domcontentloaded", timeout=45000)
+        response = page.goto(f"https://m.vk.com/{domain}", wait_until="domcontentloaded", timeout=45000)
         
         log.info(f"HTTP STATUS: {response.status if response else 'None'}")
         log.info(f"CURRENT URL: {page.url}")
