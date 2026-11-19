@@ -82,23 +82,8 @@ def fetch_html(domain: str) -> str:
             storage_state="vk_state.json"
         )
         page = context.new_page()
-        response = page.goto(f"https://m.vk.com/{domain}", wait_until="domcontentloaded", timeout=45000)
+        page.goto(f"https://m.vk.com/{domain}", wait_until="domcontentloaded", timeout=45000)
         
-        log.info(f"HTTP STATUS: {response.status if response else 'None'}")
-        log.info(f"CURRENT URL: {page.url}")
-        log.info(f"PAGE TITLE: {page.title()}")
-
-        page.wait_for_timeout(7000)
-
-        html = page.content()
-
-        log.info(f"HTML SIZE: {len(html)}")
-        log.info(f"HTML PREVIEW:\n{html[:3000]}")
-
-        log.info(f"BODY TEXT:\n{page.locator('body').inner_text()[:2000]}")
-
-        return html
-
         try:
             page.wait_for_selector(
                 ".wall_item, .post, [data-post-id], div[id^='post']",
